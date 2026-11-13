@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "beatballRooms": {
+      "$room": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+  }
+}
