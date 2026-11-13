@@ -168,7 +168,7 @@ async function netCreate(){
 async function netJoin(){
   if(!(await netInit()))return;
   const code=$('roomCode').value.trim();
-  if(!/^\\d{6}$/.test(code)){netStatus('Введи шестизначный код комнаты.');return}
+  if(!/^\d{6}$/.test(code)){
   try{
     NET.room=code;NET.roomRef=NET.db.ref('beatballRooms/'+code);
     const roomSnap=await NET.roomRef.get(),room=roomSnap.val();
