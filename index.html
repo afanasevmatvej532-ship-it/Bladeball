@@ -11,7 +11,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%}
 #hud b{display:block;font-size:22px;letter-spacing:2px;color:#fff}
 #hud i{font-style:normal}
 #fs{top:calc(env(safe-area-inset-top,0px) + 8px);right:12px;width:40px;height:40px;border:0;color:#fff;font-size:20px}
-#menuBtn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:12px;z-index:4;display:none;border:1px solid #ffffff55;color:#fff;padding:10px 13px;font-size:14px;font-weight:700}
+#menuBtn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:12px;z-index:12;display:none;border:1px solid #ffffff55;color:#fff;padding:10px 13px;font-size:14px;font-weight:700}
 #pause{position:fixed;inset:0;z-index:8;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;box-sizing:border-box;background:#06100de8;text-align:center;touch-action:pan-y}
 #pause h2{margin:0;font-size:30px}#pause small{max-width:300px;color:#cbd;line-height:1.45}
 #pause button{min-width:210px;padding:13px 18px;border:1px solid #ffffff55;border-radius:12px;background:#ffffff18;color:#fff;font-size:17px;font-weight:700}
@@ -138,7 +138,7 @@ function netListen(){
   NET.stateRef=NET.roomRef.child('game');
   const scb=NET.stateRef.on('value',snap=>{
     if(NET.host)return;
-    const v=snap.val();if(!v)return;if(!NET.inMatch&&!NET.wasInMatch&&v.state!=='end')return;if(v.state==='end'&&!NET.wasInMatch&&!NET.inMatch)return;
+    const v=snap.val();if(!v)return;
     if(v.mode===1||v.mode===3||v.mode===5)mode=N=v.mode;
     if(MAPS[v.mapId])mapId=v.mapId;
     if(Array.isArray(v.players)&&v.players.length===2*N){P=v.players;P.forEach((p,i)=>{if(p&&typeof p==='object')p.slot=i})}
@@ -473,7 +473,7 @@ function draw(k){
   const ba=Math.atan2(ball.vy,ball.vx)+ball.x*.05;
   g.fillStyle=(BALLS[SV.ball]||BALLS.classic).d;g.beginPath();g.arc(ball.x+Math.cos(ba)*3,ball.y+Math.sin(ba)*3,BR*.38,0,7);g.fill();
   g.restore();
-  if(joy){g.beginPath();g.arc(joy.ox,joy.oy,60,0,7);g.strokeStyle='rgba(255,255,255,.35)';g.lineWidth=3;g.stroke();
+  if(!joy&&state==='play'){g.beginPath();g.arc(82,h-105,60,0,7);g.strokeStyle='rgba(255,255,255,.16)';g.lineWidth=3;g.stroke();g.beginPath();g.arc(82,h-105,26,0,7);g.fillStyle='rgba(255,255,255,.10)';g.fill()}if(joy){g.beginPath();g.arc(joy.ox,joy.oy,60,0,7);
     const dx=joy.x-joy.ox,dy=joy.y-joy.oy,d=Math.min(Math.hypot(dx,dy),60),a=Math.atan2(dy,dx);
     g.beginPath();g.arc(joy.ox+Math.cos(a)*d,joy.oy+Math.sin(a)*d,26,0,7);g.fillStyle='rgba(255,255,255,.5)';g.fill()}
   g.textAlign='center';g.textBaseline='middle';
@@ -487,7 +487,7 @@ let last=performance.now();
 function loop(t){
   let k=Math.min((t-last)/16.67,2);last=t;if(ADM.open)k=0;
   const pauseOpen=$('pause').style.display==='flex';
-  $('menuBtn').style.display=['play','cd','goal'].includes(state)?'block':'none';
+  $('menuBtn').style.display=(['play','cd','goal'].includes(state)||(NET.active&&NET.inMatch))?'block':'none';
   if(!['play','cd','goal'].includes(state))$('pause').style.display='none';
   if(pauseOpen&&!NET.active)k=0;
   if(NET.active&&!NET.host&&NET.controlRef&&state!=='menu'){
