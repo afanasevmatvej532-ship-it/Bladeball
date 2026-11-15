@@ -59,7 +59,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%}
 <div class="lb">Сложность</div><div class="row" id="df"><button data-d="0">Легко</button><button data-d="1" class="sel">Нормально</button><button data-d="2">Сложно</button></div>
 <button id="go">Играть с ботами</button>
 <div class="lb">Онлайн по интернету</div>
-<div class="row"><button id="createRoom">Создать комнату</button><input id="roomCode" inputmode="numeric" maxlength="6" placeholder="Код комнаты" style="width:125px;padding:9px;border-radius:9px;background:#111;color:white;border:1px solid #667;text-align:center"><button id="joinRoom">Войти</button></div>
+<div class="row"><button id="quickOnline">🎮 Играть онлайн</button><button id="createRoom">Создать комнату</button><input id="roomCode" inputmode="numeric" maxlength="6" placeholder="Код комнаты" style="width:125px;padding:9px;border-radius:9px;background:#111;color:white;border:1px solid #667;text-align:center"><button id="joinRoom">Войти</button></div>
 <div id="onlineStatus" class="lb">Онлайн: настройка сервера ещё не выполнена</div>
 <div id="roomRoster" class="lb"></div>
 <button id="startOnline" class="sec" style="display:none">Начать онлайн-матч</button>
@@ -100,9 +100,9 @@ const FIREBASE_CONFIG = {
   projectId: "football-73774",
   appId: "1:298633102511:web:781cd31469fd0b036c805a"
 };
-const NET={ready:false,active:false,host:false,room:null,uid:'',slot:0,players:{},controls:{},lastSend:0,lastSnap:0,roomRef:null,playersRef:null,controlRef:null,stateRef:null,unsubs:[]};
+const NET={ready:false,active:false,host:false,inMatch:false,wasInMatch:false,roomStatus:'',room:null,uid:'',slot:0,players:{},controls:{},lastSend:0,lastSnap:0,roomRef:null,playersRef:null,controlRef:null,stateRef:null,unsubs:[]};
 function netStatus(t){$('onlineStatus').textContent=t}
-function lockLobby(locked){document.querySelectorAll('#md button,#mp button,#tm button,#shopb,#createRoom,#joinRoom,#roomCode').forEach(b=>b.disabled=locked)}
+function lockLobby(locked){const inRoom=!!NET.active,canHostEdit=inRoom&&NET.host&&NET.roomStatus!=='playing';document.querySelectorAll('#md button,#mp button').forEach(b=>b.disabled=inRoom?!canHostEdit:false);document.querySelectorAll('#tm button,#shopb,#createRoom,#joinRoom,#quickOnline,#roomCode').forEach(b=>b.disabled=inRoom);$('startOnline').disabled=!(NET.host&&NET.roomStatus==='waiting');}
 function netReady(){
   return FIREBASE_CONFIG.apiKey!=='ВСТАВЬТЕ_API_KEY' &&
     FIREBASE_CONFIG.projectId!=='ВСТАВЬТЕ_PROJECT_ID' &&
@@ -121,15 +121,16 @@ async function netInit(){
 function netRoster(){
   const vals=Object.values(NET.players||{}).filter(x=>x&&Number.isInteger(x.slot)&&x.slot>=0&&x.slot<2*N).sort((a,b)=>a.slot-b.slot);
   const team0=vals.filter(x=>x.slot<N).length,team1=vals.filter(x=>x.slot>=N).length;
-  const bots0=N-team0,bots1=N-team1;
-  $('roomRoster').textContent='Команда A: '+team0+' игрок(ов) + '+bots0+' бот(ов) · Команда B: '+team1+' игрок(ов) + '+bots1+' бот(ов)';
-  $('startOnline').style.display=NET.host?'block':'none';
+  const active=vals.filter(x=>x.inMatch===true).length;
+  $('roomRoster').textContent='Команда A: '+team0+' · Команда B: '+team1+' · В матче сейчас: '+active+' · Свободные места занимают боты.';
+  $('startOnline').style.display=NET.host&&NET.roomStatus==='waiting'?'block':'none';
+  $('startOnline').disabled=!(NET.host&&NET.roomStatus==='waiting');
   $('leaveRoom').style.display='block';
 }
 function netListen(){
   NET.playersRef=NET.roomRef.child('players');
   const cb=NET.playersRef.on('value',snap=>{NET.players=snap.val()||{};netRoster();
-    if(NET.host&&P){P.forEach((p,i)=>{const pl=Object.values(NET.players).find(x=>x&&x.slot===i);p.human=!!pl;p.playerName=pl?String(pl.name||NM[p.t][p.i]):NM[p.t][p.i];if(!pl)p.ch=0})}});
+    if(NET.active){const me=NET.players[NET.uid];if(me)NET.inMatch=me.inMatch===true;}if(NET.host&&P){P.forEach((p,i)=>{const pl=Object.values(NET.players).find(x=>x&&x.slot===i);p.human=!!(pl&&pl.inMatch===true);p.playerName=pl?String(pl.name||NM[p.t][p.i]):NM[p.t][p.i];if(!p.human)p.ch=0})}});
   NET.unsubs.push(()=>NET.playersRef.off('value',cb));
   NET.controlRef=NET.roomRef.child('controls');
   const cc=NET.controlRef.on('value',snap=>{NET.controls=snap.val()||{}});
@@ -137,7 +138,7 @@ function netListen(){
   NET.stateRef=NET.roomRef.child('game');
   const scb=NET.stateRef.on('value',snap=>{
     if(NET.host)return;
-    const v=snap.val();if(!v)return;
+    const v=snap.val();if(!v)return;if(!NET.inMatch&&!NET.wasInMatch&&v.state!=='end')return;if(v.state==='end'&&!NET.wasInMatch&&!NET.inMatch)return;
     if(v.mode===1||v.mode===3||v.mode===5)mode=N=v.mode;
     if(MAPS[v.mapId])mapId=v.mapId;
     if(Array.isArray(v.players)&&v.players.length===2*N){P=v.players;P.forEach((p,i)=>{if(p&&typeof p==='object')p.slot=i})}
@@ -145,21 +146,37 @@ function netListen(){
     if(Array.isArray(v.score)&&v.score.length===2&&v.score.every(x=>Number.isFinite(x)))score=v.score;if(typeof v.tl==='number'&&Number.isFinite(v.tl))tl=v.tl;
     if(typeof v.ot==='boolean')ot=v.ot;
     if(['play','cd','goal','end','menu'].includes(v.state)){state=v.state;if(state==='play'||state==='cd'||state==='goal'){$('msg').style.display='none';$('exitMatch').style.display='block';document.querySelectorAll('.act').forEach(e=>e.style.display='block')}
-      if(state==='end'||state==='menu'){$('exitMatch').style.display='none';$('msg').style.display='flex';$('mt').textContent=(v.state==='end'?(v.score&&v.score[NET.slot<N?0:1]>(v.score&&v.score[NET.slot<N?1:0])?'Победа! 🏆':(v.score&&v.score[0]===v.score[1]?'Ничья':'Поражение')):'Битбол'); $('ms').textContent='Счёт '+(v.score||[0,0]).join(' : ');document.querySelectorAll('.act').forEach(e=>e.style.display='none')}}
+      if(state==='end'||state==='menu'){$('exitMatch').style.display='none';$('msg').style.display='flex';$('mt').textContent=(v.state==='end'?(v.score&&v.score[NET.slot<N?0:1]>(v.score&&v.score[NET.slot<N?1:0])?'Победа! 🏆':(v.score&&v.score[0]===v.score[1]?'Ничья':'Поражение')):'Битбол'); $('ms').textContent='Счёт '+(v.score||[0,0]).join(' : ');document.querySelectorAll('.act').forEach(e=>e.style.display='none')}if(v.state==='end'){NET.inMatch=false;NET.wasInMatch=false;}}
     if(typeof v.cdn==='number')cdn=v.cdn;if(typeof v.stT==='number')stT=v.stT;
   });
   NET.unsubs.push(()=>NET.stateRef.off('value',scb));
-  const roomCb=NET.roomRef.on('value',snap=>{if(!snap.exists()&&NET.active){NET.unsubs.forEach(f=>{try{f()}catch(e){}});NET.unsubs=[];NET.active=NET.host=false;NET.roomRef=null;NET.room=null;NET.players={};NET.controls={};$('go').style.display='block';$('startOnline').style.display='none';$('leaveRoom').style.display='none';$('roomRoster').textContent='';lockLobby(false);$('msg').style.display='flex';document.querySelectorAll('.act').forEach(e=>e.style.display='none');netStatus('Комната закрыта создателем или соединение потеряно.')}});
+  const roomCb=NET.roomRef.on('value',snap=>{
+    if(!snap.exists()&&NET.active){NET.unsubs.forEach(f=>{try{f()}catch(e){}});NET.unsubs=[];NET.active=NET.host=false;NET.roomRef=null;NET.room=null;NET.players={};NET.controls={};$('go').style.display='block';$('startOnline').style.display='none';$('leaveRoom').style.display='none';$('roomRoster').textContent='';lockLobby(false);$('msg').style.display='flex';document.querySelectorAll('.act').forEach(e=>e.style.display='none');netStatus('Комната закрыта.')}
+    else if(snap.exists()&&NET.active){
+      const r=snap.val()||{}, players=r.players||{};
+      NET.host=r.host===NET.uid;NET.roomStatus=r.status||'waiting';const me=players[NET.uid];if(me)NET.inMatch=me.inMatch===true;
+      if([1,3,5].includes(Number(r.mode))){mode=N=Number(r.mode)}
+      if(MAPS[r.mapId]){SV.map=mapId=r.mapId}if(TEAMS[r.team])SV.team=r.team;if(BALLS[r.ball])SV.ball=r.ball;
+      $('md').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.m===mode));
+      $('mp').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',b.dataset.k===SV.map));
+      $('startOnline').style.display=NET.host&&NET.roomStatus==='waiting'?'block':'none';
+      if(r.host&&!players[r.host]){
+        const next=Object.values(players).filter(Boolean).sort((a,b)=>(a.slot||0)-(b.slot||0))[0];
+        if(next&&next.uid)NET.roomRef.child('host').transaction(current=>current&&!players[current]?next.uid:current);
+      }
+      lockLobby(true);
+    }
+  });
   NET.unsubs.push(()=>NET.roomRef&&NET.roomRef.off('value',roomCb));
 }
 async function netCreate(){
   if(!(await netInit()))return;
   try{
     const code=String(Math.floor(100000+Math.random()*900000));
-    NET.room=code;NET.host=true;NET.active=true;NET.slot=0;N=mode;
+    NET.room=code;NET.host=true;NET.active=true;NET.inMatch=false;NET.wasInMatch=false;NET.roomStatus='waiting';NET.slot=0;N=mode;
     NET.roomRef=NET.db.ref('beatballRooms/'+code);
-    await NET.roomRef.set({createdAt:firebase.database.ServerValue.TIMESTAMP,mode:mode,mapId:SV.map,team:SV.team,ball:SV.ball,host:NET.uid,players:{[NET.uid]:{uid:NET.uid,name:'Игрок 1',slot:0}},controls:{},status:'waiting'});
-    await NET.roomRef.onDisconnect().remove();
+    await NET.roomRef.set({createdAt:firebase.database.ServerValue.TIMESTAMP,mode:mode,mapId:SV.map,team:SV.team,ball:SV.ball,host:NET.uid,players:{[NET.uid]:{uid:NET.uid,name:'Игрок 1',slot:0,inMatch:false}},controls:{},status:'waiting'});
+    await NET.roomRef.child('players/'+NET.uid).onDisconnect().remove();
     netListen();lockLobby(true);$('roomCode').value=code;
     netStatus('Комната '+code+' создана. Отправь код другу.');
     $('go').style.display='none';$('startOnline').style.display='block';
@@ -173,54 +190,102 @@ async function netJoin(){
     NET.room=code;NET.roomRef=NET.db.ref('beatballRooms/'+code);
     const roomSnap=await NET.roomRef.get(),room=roomSnap.val();
     if(!room){netStatus('Комната не найдена. Проверь код.');return}
-    if(room.status==='playing'||room.status==='finished'){netStatus('Матч уже начался. Попроси создателя открыть новую комнату.');return}
+    NET.roomStatus=room.status||'waiting';
     mode=[1,3,5].includes(Number(room.mode))?Number(room.mode):3;N=mode;mapId=MAPS[room.mapId]?room.mapId:'classic';SV.map=mapId;if(TEAMS[room.team])SV.team=room.team;if(BALLS[room.ball])SV.ball=room.ball;
     const playersRef=NET.roomRef.child('players');
     const tx=await playersRef.transaction(players=>{
       players=players||{};
-      if(players[NET.uid])return players;
+      if(players[NET.uid]){players[NET.uid].inMatch=false;return players;}
       const used=Object.values(players).filter(Boolean).map(p=>p.slot);
       let chosen=-1;for(let i=0;i<2*N;i++)if(!used.includes(i)){chosen=i;break}
       if(chosen<0)return;
-      players[NET.uid]={uid:NET.uid,name:'Игрок '+(chosen+1),slot:chosen};
+      players[NET.uid]={uid:NET.uid,name:'Игрок '+(chosen+1),slot:chosen,inMatch:false};
       return players;
     });
     const joined=tx.snapshot.val()||{};
     if(!tx.committed||!joined[NET.uid]){netStatus('Комната заполнена.');return}
-    NET.slot=joined[NET.uid].slot;NET.host=false;NET.active=true;
+    NET.slot=joined[NET.uid].slot;NET.host=false;NET.active=true;NET.inMatch=false;NET.wasInMatch=false;
     await NET.roomRef.child('players/'+NET.uid).onDisconnect().remove();
     netListen();lockLobby(true);$('go').style.display='none';
-    netStatus('Ты в комнате '+code+'. Ожидай начала матча.');
+    netStatus(room.status==='playing'?'Матч уже идёт. Ты в комнате и сможешь играть в следующем матче.':'Ты в комнате '+code+'. Ожидай начала матча.');
   }catch(e){NET.active=NET.host=false;NET.room=null;NET.roomRef=null;lockLobby(false);$('leaveRoom').style.display='none';netStatus('Ошибка входа: '+e.message)}
 }
 async function netStart(){
-  if(!NET.active||!NET.host)return;
-  N=mode;mapId=SV.map;reset(true);state='cd';cdn=180;
-  const players=Object.values(NET.players||{});
-  P.forEach((p,i)=>{p.slot=i;p.human=players.some(x=>x.slot===i);p.playerName=(players.find(x=>x.slot===i)||{}).name||NM[p.t][p.i]});
-  await NET.roomRef.update({mode:N,mapId,team:SV.team,ball:SV.ball,status:'playing'});
-  $('msg').style.display='none';$('exitMatch').style.display='none';document.querySelectorAll('.act').forEach(e=>e.style.display='block');
-  netStatus('Онлайн-матч идёт. Боты автоматически занимают свободные места.');
+  if(!NET.active||!NET.host||NET.roomStatus!=='waiting')return;
+  try{
+    N=mode;mapId=SV.map;reset(true);
+    const tx=await NET.roomRef.child('players').transaction(players=>{
+      if(!players)return players;
+      Object.keys(players).forEach(uid=>{if(players[uid])players[uid].inMatch=true});
+      return players;
+    });
+    NET.players=tx.snapshot.val()||NET.players;NET.inMatch=true;NET.wasInMatch=true;
+    const players=Object.values(NET.players||{});
+    P.forEach((p,i)=>{p.slot=i;const pl=players.find(x=>x&&x.slot===i&&x.inMatch===true);p.human=!!pl;p.playerName=pl?String(pl.name||NM[p.t][p.i]):NM[p.t][p.i]});
+    state='cd';cdn=180;
+    await NET.roomRef.update({mode:N,mapId,team:SV.team,ball:SV.ball,status:'playing'});
+    NET.roomStatus='playing';$('msg').style.display='none';$('exitMatch').style.display='none';document.querySelectorAll('.act').forEach(e=>e.style.display='block');lockLobby(true);
+    netStatus('Онлайн-матч идёт. Если игрок выйдет в меню, его место займёт бот.');
+  }catch(e){netStatus('Не удалось начать матч: '+e.message)}
 }
-async function netLeave(){
-  const wasHost=NET.host,ref=NET.roomRef;
-  NET.active=false;
-  try{if(ref){if(wasHost)await ref.remove();else await ref.child('players/'+NET.uid).remove()}}catch(e){}
-  NET.unsubs.forEach(f=>{try{f()}catch(e){}});NET.unsubs=[];
-  NET.host=false;NET.room=null;NET.players={};NET.controls={};NET.roomRef=null;NET.playersRef=null;NET.controlRef=null;NET.stateRef=null;
-  $('go').style.display='block';$('startOnline').style.display='none';$('leaveRoom').style.display='none';$('roomRoster').textContent='';$('exitMatch').style.display='none';$('menuBtn').style.display='none';lockLobby(false);
-  netStatus('Вышел из комнаты.');state='menu';$('pause').style.display='none';$('msg').style.display='flex';$('mt').textContent='Битбол';$('ms').textContent='Двигайся джойстиком слева. «Удар» — тап для лёгкого, удержание для сильного. ⚡ — рывок.';$('go').textContent='Играть с ботами';$('df').style.display='flex';document.querySelectorAll('.act').forEach(e=>e.style.display='none');lobby();
-}
-function exitToMenu(){
+async function netExitMatch(){
+  if(!NET.active)return;
+  try{
+    await NET.roomRef.child('players/'+NET.uid+'/inMatch').set(false);
+    await NET.roomRef.child('controls/'+NET.slot).remove();
+  }catch(e){netStatus('Не удалось обновить статус игрока: '+e.message)}
+  NET.inMatch=false;NET.wasInMatch=false;
+  if(NET.host&&P&&P[NET.slot]){P[NET.slot].human=false;P[NET.slot].ch=0;}
   $('pause').style.display='none';$('exitMatch').style.display='none';joy=null;inp.x=inp.y=0;inp.kick=inp.pend=inp.dash=false;
   for(const k in keys)keys[k]=0;
-  if(NET.active){netLeave();return}
+  if(!NET.host)state='menu';
+  $('msg').style.display='flex';$('mt').textContent='Битбол';$('ms').textContent=NET.roomStatus==='playing'?'Ты вышел из матча, но остался в комнате. Твоё место займёт бот.':'Ты в комнате. Ожидай следующего матча.';
+  $('go').style.display='none';$('df').style.display='none';$('menuBtn').style.display='none';document.querySelectorAll('.act').forEach(e=>e.style.display='none');
+  netStatus('Ты остался в комнате.');lobby();
+}
+async function netLeave(){
+  const wasHost=NET.host,ref=NET.roomRef,uid=NET.uid,slot=NET.slot;
+  NET.active=false;
+  try{
+    if(ref){
+      const playersSnap=await ref.child('players').get();
+      const players=playersSnap.val()||{};
+      const remaining=Object.values(players).filter(p=>p&&p.uid!==uid).sort((a,b)=>(a.slot||0)-(b.slot||0));
+      if(wasHost){
+        if(remaining.length){await ref.update({host:remaining[0].uid});await ref.child('players/'+uid).remove();}
+        else await ref.remove();
+      }else await ref.child('players/'+uid).remove();
+      await ref.child('controls/'+slot).remove();
+    }
+  }catch(e){netStatus('Ошибка выхода из комнаты: '+e.message)}
+  NET.unsubs.forEach(f=>{try{f()}catch(e){}});NET.unsubs=[];
+  NET.host=false;NET.inMatch=false;NET.wasInMatch=false;NET.roomStatus='';NET.room=null;NET.players={};NET.controls={};NET.roomRef=null;NET.playersRef=null;NET.controlRef=null;NET.stateRef=null;
+  $('go').style.display='block';$('df').style.display='flex';$('startOnline').style.display='none';$('leaveRoom').style.display='none';$('roomRoster').textContent='';$('exitMatch').style.display='none';$('menuBtn').style.display='none';lockLobby(false);
+  netStatus('Вышел из комнаты.');state='menu';$('pause').style.display='none';$('msg').style.display='flex';$('mt').textContent='Битбол';$('ms').textContent='Двигайся джойстиком слева. «Удар» — тап для лёгкого, удержание для сильного. ⚡ — рывок.';$('go').textContent='Играть с ботами';document.querySelectorAll('.act').forEach(e=>e.style.display='none');lobby();
+}
+async function netQuickPlay(){
+  if(!(await netInit()))return;
+  if(NET.active){netStatus('Ты уже находишься в комнате.');return}
+  netStatus('Ищем свободную комнату…');
+  try{
+    const snap=await NET.db.ref('beatballRooms').orderByChild('status').equalTo('waiting').limitToLast(30).once('value');
+    const rooms=snap.val()||{};
+    const candidates=Object.entries(rooms).filter(([code,r])=>r&&Number(r.mode)===Number(mode)&&r.players&&Object.keys(r.players).length<2*Number(r.mode)).reverse();
+    for(const [code] of candidates){$('roomCode').value=code;await netJoin();if(NET.active)return;}
+    netStatus('Свободной комнаты нет. Создаём новую…');await netCreate();
+    if(NET.active)netStatus('Комната создана: '+NET.room+'. Поделись кодом с другом.');
+  }catch(e){netStatus('Не удалось найти комнаты. Проверь правила Firebase и индекс status: '+e.message)}
+}
+function exitToMenu(){
+  if(NET.active){netExitMatch();return}
+  $('pause').style.display='none';$('exitMatch').style.display='none';joy=null;inp.x=inp.y=0;inp.kick=inp.pend=inp.dash=false;
+  for(const k in keys)keys[k]=0;
   state='menu';$('msg').style.display='flex';$('mt').textContent='Битбол';$('ms').textContent='Двигайся джойстиком слева. «Удар» — тап для лёгкого, удержание для сильного. ⚡ — рывок.';$('go').textContent='Играть с ботами';$('df').style.display='flex';$('menuBtn').style.display='none';document.querySelectorAll('.act').forEach(e=>e.style.display='none');lobby();
 }
-$('menuBtn').onclick=()=>{if(!['play','cd','goal'].includes(state))return;joy=null;inp.kick=inp.pend=inp.dash=false;$('pauseInfo').textContent=NET.active?(NET.host?'Онлайн-матч продолжится для остальных. Если ты создатель, комната закроется.':'Онлайн-матч продолжится для остальных. Ты покинешь комнату.'):'Матч будет остановлен, пока открыто это меню.';$('pause').style.display='flex'};
+$('menuBtn').onclick=()=>{if(!['play','cd','goal'].includes(state))return;joy=null;inp.kick=inp.pend=inp.dash=false;$('pauseInfo').textContent=NET.active?'Онлайн-матч продолжится для остальных. Ты останешься в комнате, а твоим игроком будет управлять бот.':'Матч будет остановлен, пока открыто это меню.';$('pause').style.display='flex'};
 $('resumeBtn').onclick=()=>{$('pause').style.display='none'};
 $('exitMenuBtn').onclick=exitToMenu;
-$('createRoom').onclick=netCreate;$('joinRoom').onclick=netJoin;$('startOnline').onclick=netStart;$('leaveRoom').onclick=netLeave;
+$('quickOnline').onclick=netQuickPlay;$('createRoom').onclick=netCreate;$('joinRoom').onclick=netJoin;$('startOnline').onclick=netStart;$('leaveRoom').onclick=netLeave;
 async function exitMatchToMenu(){exitToMenu()}
 $('exitMatch').onclick=exitMatchToMenu;
 
@@ -233,7 +298,7 @@ var ko=0;
 function reset(full){
   P=[];
   for(let t=0;t<2;t++)for(let i=0;i<N;i++){const hx=t?W-HOME[i][0]:HOME[i][0],slot=t*N+i;
-    const onlinePlayer=NET.active?Object.values(NET.players||{}).find(x=>x.slot===slot):null;
+    const onlinePlayer=NET.active?Object.values(NET.players||{}).find(x=>x.slot===slot&&x.inMatch===true):null;
     P.push({x:hx,y:HOME[i][1],vx:0,vy:0,t:t,i:i,hx:hx,hy:HOME[i][1],human:NET.active?!!onlinePlayer:(t===0&&i===0),slot:slot,playerName:onlinePlayer?.name||NM[t][i],cd:0,ch:0,dt:0,dcd:0,tg:0});}
   P[0].x=W/2-90;P[0].y=H/2;
   if(full)ko=0;
@@ -344,7 +409,7 @@ function goal(t){
   $('ms').textContent='';
 }
 function endGame(){
-  state='end';$('exitMatch').style.display='none';$('menuBtn').style.display='none';const a=score[0],b=score[1];
+  state='end';if(NET.active&&NET.host){NET.inMatch=false;NET.wasInMatch=false;NET.roomStatus='waiting';NET.players=Object.fromEntries(Object.entries(NET.players||{}).map(([uid,pl])=>[uid,{...pl,inMatch:false}]));NET.roomRef.child('players').set(NET.players).catch(()=>{});NET.roomRef.child('controls').remove().catch(()=>{});NET.roomRef.update({status:'waiting'}).catch(()=>{});lockLobby(true);netStatus('Матч завершён. Комната остаётся открытой — можно начать реванш.')}$('exitMatch').style.display='none';$('menuBtn').style.display='none';const a=score[0],b=score[1];
   $('mt').textContent=a>b?'Победа! 🏆':a===b?'Ничья':'Поражение';
   const rw=15+a*10+(a>b?50:0);SV.coins+=rw;save();lobby();$('ms').textContent='Счёт '+a+' : '+b+'  ·  +'+rw+' 🪙';$('go').textContent='Реванш';
   $('df').style.display='flex';$('msg').style.display='flex';
@@ -445,7 +510,7 @@ function lobby(){
   $('coins').textContent='🪙 '+SV.coins;
   $('mp').innerHTML=Object.keys(MAPS).map(k=>`<button data-k="${k}" class="${SV.map==k?'sel':''}">${MAPS[k].n}${own('m:'+k)?'':' 🔒'}</button>`).join('');
   $('tm').innerHTML=Object.keys(TEAMS).map(k=>`<button data-k="${k}" class="${SV.team==k?'sel':''}"><span class="dot" style="background:${TEAMS[k].b}"></span>${TEAMS[k].n}${own('t:'+k)?'':' 🔒'}</button>`).join('');
-  document.querySelectorAll('#mp button').forEach(b=>b.onclick=()=>{if(own('m:'+b.dataset.k)){SV.map=b.dataset.k;save();lobby()}else shopOpen()});
+  document.querySelectorAll('#mp button').forEach(b=>b.onclick=()=>{if(own('m:'+b.dataset.k)){SV.map=b.dataset.k;save();if(NET.active&&NET.host&&NET.roomRef)NET.roomRef.update({mapId:SV.map}).catch(()=>{});lobby()}else shopOpen()});
   document.querySelectorAll('#tm button').forEach(b=>b.onclick=()=>{if(own('t:'+b.dataset.k)){SV.team=b.dataset.k;save();lobby()}else shopOpen()});
   document.querySelectorAll('#md button').forEach(b=>b.classList.toggle('sel',+b.dataset.m==mode));
   lockLobby(NET.active);
@@ -468,7 +533,7 @@ function shopR(){
   $('shc').textContent='🪙 '+SV.coins;
 }
 $('shopb').onclick=shopOpen;$('shx').onclick=()=>{$('shop').style.display='none'};
-document.querySelectorAll('#md button').forEach(b=>b.onclick=()=>{mode=+b.dataset.m;lobby()});
+document.querySelectorAll('#md button').forEach(b=>b.onclick=()=>{if(NET.active&&!NET.host)return;const next=+b.dataset.m;if(NET.active&&NET.host&&Object.keys(NET.players||{}).length>2*next){netStatus('В комнате больше игроков, чем мест в этом режиме. Сначала попроси лишних игроков выйти.');return}mode=next;N=mode;if(NET.active&&NET.host&&NET.roomRef)NET.roomRef.update({mode:mode}).catch(()=>{});lobby()});
 const ADM={open:false,ok:false,bs:1,kp:1,err:'',pw:''};
 const lsg=k=>{try{return localStorage.getItem(k)}catch(e){return null}},lss=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 function hs(s){let a=0x811c9dc5,b=5381;for(let i=0;i<s.length;i++){a^=s.charCodeAt(i);a=Math.imul(a,16777619);b=(b*33)^s.charCodeAt(i)}return(a>>>0).toString(16)+(b>>>0).toString(16)+s.length}
