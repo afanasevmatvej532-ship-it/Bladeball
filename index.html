@@ -225,8 +225,12 @@ async function netJoin(){
       players=players||{};
       if(players[NET.uid]){players[NET.uid].inMatch=false;return players;}
       const used=Object.values(players).filter(Boolean).map(p=>p.slot);
-      let chosen=-1;for(let i=0;i<2*N;i++)if(!used.includes(i)){chosen=i;break}
-      if(chosen<0)return;
+const team=getOnlineTeam();
+const start=team==='red'?N:0;
+const end=team==='red'?2*N:N;
+let chosen=-1;
+for(let i=start;i<end;i++)if(!used.includes(i)){chosen=i;break}
+if(chosen<0)return;
       players[NET.uid]={uid:NET.uid,name:getOnlineNick(),slot:chosen,team:getOnlineTeam(),inMatch:false};
       return players;
     });
