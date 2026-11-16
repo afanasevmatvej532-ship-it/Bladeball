@@ -61,7 +61,14 @@ canvas{position:fixed;inset:0;width:100%;height:100%}
 <div class="lb">Онлайн по интернету</div>
 <div class="row"><button id="quickOnline">🎮 Играть онлайн</button><button id="createRoom">Создать комнату</button><input id="roomCode" inputmode="numeric" maxlength="6" placeholder="Код комнаты" style="width:125px;padding:9px;border-radius:9px;background:#111;color:white;border:1px solid #667;text-align:center"><button id="joinRoom">Войти</button></div>
 <div id="onlineStatus" class="lb">Онлайн: настройка сервера ещё не выполнена</div>
-<div id="roomRoster" class="lb"></div>
+<div class="lb">Твой ник</div>
+<input id="playerNick" maxlength="16" placeholder="Введи ник" 
+style="padding:10px;border-radius:9px;background:#111;color:white;border:1px solid #667;text-align:center;width:180px">
+<div class="lb">Твоя команда</div>
+<div class="row" id="onlineTeams">
+<button data-team="blue">🔵 Синие</button>
+<button data-team="red">🔴 Красные</button>
+</div>
 <button id="startOnline" class="sec" style="display:none">Начать онлайн-матч</button>
 <button id="leaveRoom" class="sec" style="display:none">Выйти из комнаты</button>
 <button id="shopb" class="sec">🛒 Магазин</button></div>
