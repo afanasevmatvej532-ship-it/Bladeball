@@ -201,7 +201,7 @@ function getOnlineTeam(){
   if(!(await netInit()))return;
   try{
     const code=String(Math.floor(100000+Math.random()*900000));
-    NET.room=code;NET.host=true;NET.active=true;NET.inMatch=false;NET.wasInMatch=false;NET.roomStatus='waiting';NET.slot=getOnlineTeam()==='red'?N:0;N=mode;
+    NET.room=code;NET.host=true;NET.active=true;NET.inMatch=false;NET.wasInMatch=false;NET.roomStatus='waiting';N=mode;NET.slot=getOnlineTeam()==='red'?N:0;
     NET.roomRef=NET.db.ref('beatballRooms/'+code);
     await NET.roomRef.set({createdAt:firebase.database.ServerValue.TIMESTAMP,mode:mode,mapId:SV.map,team:SV.team,ball:SV.ball,host:NET.uid,players:{[NET.uid]:{uid:NET.uid,name:getOnlineNick(),slot:0,inMatch:false}},controls:{},status:'waiting'});
     await NET.roomRef.child('players/'+NET.uid).onDisconnect().remove();
