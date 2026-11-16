@@ -126,14 +126,24 @@ async function netInit(){
   }catch(e){netStatus('Ошибка подключения к серверу: '+e.message);return false}
 }
 function netRoster(){
-  const vals=Object.values(NET.players||{}).filter(x=>x&&Number.isInteger(x.slot)&&x.slot>=0&&x.slot<2*N).sort((a,b)=>a.slot-b.slot);
-  const team0=vals.filter(x=>x.slot<N).length,team1=vals.filter(x=>x.slot>=N).length;
-  const active=vals.filter(x=>x.inMatch===true).length;
-  $('roomRoster').textContent='Команда A: '+team0+' · Команда B: '+team1+' · В матче сейчас: '+active+' · Свободные места занимают боты.';
+  const vals=Object.values(NET.players||{})
+    .filter(x=>x&&Number.isInteger(x.slot)&&x.slot>=0&&x.slot<2*N)
+    .sort((a,b)=>a.slot-b.slot);
+
+  const names=vals.map(x=>
+    (x.slot<N?'🔵 ':'🔴 ')+
+    (x.name||'Игрок')+
+    (x.uid===NET.uid?' (ты)':'')
+  );
+
+  $('roomRoster').textContent=names.join('\n')+
+    '\nИгроков: '+vals.length+
+    ' · В матче: '+vals.filter(x=>x.inMatch===true).length;
+
   $('startOnline').style.display=NET.host&&NET.roomStatus==='waiting'?'block':'none';
   $('startOnline').disabled=!(NET.host&&NET.roomStatus==='waiting');
   $('leaveRoom').style.display='block';
-}
+                                                                }
 function netListen(){
   NET.playersRef=NET.roomRef.child('players');
   const cb=NET.playersRef.on('value',snap=>{NET.players=snap.val()||{};netRoster();
