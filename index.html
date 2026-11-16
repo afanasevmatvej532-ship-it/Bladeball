@@ -317,18 +317,58 @@ function exitToMenu(){
 $('menuBtn').onclick=()=>{if(!['play','cd','goal'].includes(state))return;joy=null;inp.kick=inp.pend=inp.dash=false;$('pauseInfo').textContent=NET.active?'Онлайн-матч продолжится для остальных. Ты останешься в комнате, а твоим игроком будет управлять бот.':'Матч будет остановлен, пока открыто это меню.';$('pause').style.display='flex'};
 $('resumeBtn').onclick=()=>{$('pause').style.display='none'};
 $('exitMenuBtn').onclick=exitToMenu;
-document.querySelectorAll('#onlineTeams button').forEach(b=>{
-  b.onclick=()=>{
-    if(NET.active&&NET.roomStatus==='playing'){
-      netStatus('Во время матча команду менять нельзя.');
+async function setOnlineTeam(team){
+  if(NET.active&&NET.roomStatus!=='waiting'){
+    netStatus('Во время матча команду менять нельзя.');
+    return;
+  }
+
+  if(NET.active){
+    try{
+      const ref=NET.roomRef.child('players');
+      const tx=await ref.transaction(players=>{
+        if(!players||!players[NET.uid])return;
+        const me=players[NET.uid];
+        const start=team==='red'?N:0;
+        const end=team==='red'?2*N:N;
+        const used=Object.values(players)
+          .filter(p=>p&&p.uid!==NET.uid)
+          .map(p=>p.slot);
+
+        let slot=-1;
+        if(me.slot>=start&&me.slot<end&&!used.includes(me.slot)){
+          slot=me.slot;
+        }else{
+          for(let i=start;i<end;i++){
+            if(!used.includes(i)){slot=i;break}
+          }
+        }
+        if(slot<0)return;
+        players[NET.uid]={...me,slot:slot,team:team};
+        return players;
+      });
+
+      const me=tx.snapshot.val()&&tx.snapshot.val()[NET.uid];
+      if(!tx.committed||!me){
+        netStatus('В этой команде нет свободных мест.');
+        return;
+      }
+      NET.slot=me.slot;
+    }catch(e){
+      netStatus('Ошибка смены команды: '+e.message);
       return;
     }
-    document.querySelectorAll('#onlineTeams button').forEach(x=>x.classList.remove('sel'));
-    b.classList.add('sel');
-    localStorage.setItem('bbOnlineTeam',b.dataset.team);
-  };
-});
+  }
 
+  localStorage.setItem('bbOnlineTeam',team);
+  document.querySelectorAll('#onlineTeams button').forEach(b=>{
+    b.classList.toggle('sel',b.dataset.team===team);
+  });
+}
+
+document.querySelectorAll('#onlineTeams button').forEach(b=>{
+  b.onclick=()=>setOnlineTeam(b.dataset.team);
+});
 const savedTeam=localStorage.getItem('bbOnlineTeam')||'blue';
 document.querySelectorAll('#onlineTeams button').forEach(b=>{
   b.classList.toggle('sel',b.dataset.team===savedTeam);
