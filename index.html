@@ -176,7 +176,15 @@ function netListen(){
   });
   NET.unsubs.push(()=>NET.roomRef&&NET.roomRef.off('value',roomCb));
 }
-async function netCreate(){
+function getOnlineNick(){
+  const nick=$('playerNick').value.trim().slice(0,16);
+  const result=nick||'Игрок';
+  localStorage.setItem('bbNick',result);
+  return result;
+}
+$('playerNick').value=localStorage.getItem('bbNick')||'';
+$('playerNick').addEventListener('change',getOnlineNick);
+  async function netCreate(){
   if(!(await netInit()))return;
   try{
     const code=String(Math.floor(100000+Math.random()*900000));
