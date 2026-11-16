@@ -227,7 +227,7 @@ async function netJoin(){
       const used=Object.values(players).filter(Boolean).map(p=>p.slot);
       let chosen=-1;for(let i=0;i<2*N;i++)if(!used.includes(i)){chosen=i;break}
       if(chosen<0)return;
-      players[NET.uid]={uid:NET.uid,name:getOnlineNick(),slot:chosen,inMatch:false};
+      players[NET.uid]={uid:NET.uid,name:getOnlineNick(),slot:chosen,team:getOnlineTeam(),inMatch:false};
       return players;
     });
     const joined=tx.snapshot.val()||{};
