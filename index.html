@@ -194,6 +194,9 @@ function getOnlineNick(){
 }
 $('playerNick').value=localStorage.getItem('bbNick')||'';
 $('playerNick').addEventListener('change',getOnlineNick);
+function getOnlineTeam(){
+  return localStorage.getItem('bbOnlineTeam')==='red'?'red':'blue';
+}  
   async function netCreate(){
   if(!(await netInit()))return;
   try{
