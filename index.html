@@ -243,7 +243,7 @@ if(chosen<0)return;
   }catch(e){NET.active=NET.host=false;NET.room=null;NET.roomRef=null;lockLobby(false);$('leaveRoom').style.display='none';netStatus('Ошибка входа: '+e.message)}
 }
 async function netStart(){
-  if(!NET.active||!NET.host||NET.roomStatus!=='waiting')return;
+if(!NET.active||!NET.host||NET.roomStatus!=='waiting')return;  
   try{
     N=mode;mapId=SV.map;reset(true);
     const tx=await NET.roomRef.child('players').transaction(players=>{
