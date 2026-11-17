@@ -401,7 +401,7 @@ const inp={x:0,y:0,kick:false,pend:false,dash:false},keys={};
 let joy=null;
 addEventListener('keydown',e=>{keys[e.code]=1;if(e.code=='Space'&&!inp.kick){inp.kick=true;inp.pend=true}if(e.code=='ShiftLeft'||e.code=='ShiftRight')inp.dash=true});
 addEventListener('keyup',e=>{keys[e.code]=0;if(e.code=='Space')inp.kick=false;if(e.code=='ShiftLeft'||e.code=='ShiftRight')inp.dash=false});
-cv.addEventListener('pointerdown',e=>{if(state==='play'&&!joy&&e.clientX<w*.62){joy={id:e.pointerId,ox:e.clientX,oy:e.clientY,x:e.clientX,y:e.clientY};try{cv.setPointerCapture(e.pointerId)}catch(_){}}});
+cv.addEventListener('pointerdown',e=>{if((state==='play'||(NET.active&&NET.inMatch))&&!joy&&e.clientX<w*.62){joy={id:e.pointerId,ox:e.clientX,oy:e.clientY,x:e.clientX,y:e.clientY};try{cv.setPointerCapture(e.pointerId)}catch(_){}}});
 cv.addEventListener('pointermove',e=>{if(joy&&e.pointerId==joy.id){joy.x=e.clientX;joy.y=e.clientY}});
 const je=e=>{if(joy&&e.pointerId==joy.id)joy=null};
 cv.addEventListener('pointerup',je);cv.addEventListener('pointercancel',je);
