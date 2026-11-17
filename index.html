@@ -564,7 +564,7 @@ function draw(k){
   const ba=Math.atan2(ball.vy,ball.vx)+ball.x*.05;
   g.fillStyle=(BALLS[SV.ball]||BALLS.classic).d;g.beginPath();g.arc(ball.x+Math.cos(ba)*3,ball.y+Math.sin(ba)*3,BR*.38,0,7);g.fill();
   g.restore();
-  if(!joy&&state==='play'){g.beginPath();g.arc(82,h-105,60,0,7);g.strokeStyle='rgba(255,255,255,.16)';g.lineWidth=3;g.stroke();g.beginPath();g.arc(82,h-105,26,0,7);g.fillStyle='rgba(255,255,255,.10)';g.fill()}if(joy){g.beginPath();g.arc(joy.ox,joy.oy,60,0,7);
+  if(!joy&&(state==='play'||(NET.active&&NET.inMatch))){g.beginPath();g.arc(82,h-105,60,0,7);g.strokeStyle='rgba(255,255,255,.16)';g.lineWidth=3;g.stroke();g.beginPath();g.arc(82,h-105,26,0,7);g.fillStyle='rgba(255,255,255,.10)';g.fill()}if(joy){g.beginPath();g.arc(joy.ox,joy.oy,60,0,7);
     const dx=joy.x-joy.ox,dy=joy.y-joy.oy,d=Math.min(Math.hypot(dx,dy),60),a=Math.atan2(dy,dx);
     g.beginPath();g.arc(joy.ox+Math.cos(a)*d,joy.oy+Math.sin(a)*d,26,0,7);g.fillStyle='rgba(255,255,255,.5)';g.fill()}
   g.textAlign='center';g.textBaseline='middle';
