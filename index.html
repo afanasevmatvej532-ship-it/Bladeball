@@ -243,7 +243,10 @@ if(chosen<0)return;
   }catch(e){NET.active=NET.host=false;NET.room=null;NET.roomRef=null;lockLobby(false);$('leaveRoom').style.display='none';netStatus('Ошибка входа: '+e.message)}
 }
 async function netStart(){
-if(!NET.active||!NET.host||NET.roomStatus!=='waiting')return;  
+
+if(!NET.active){netStatus('ОШИБКА: ты не подключён к комнате');return;}
+if(!NET.host){netStatus('ОШИБКА: запускать матч может только создатель комнаты');return;}
+if(NET.roomStatus!=='waiting'){netStatus('ОШИБКА: комната не ожидает запуска. Статус: '+NET.roomStatus);return;}
   try{
     N=mode;mapId=SV.map;reset(true);
     const tx=await NET.roomRef.child('players').transaction(players=>{
